@@ -1223,6 +1223,8 @@ def load_shell_content(content, add_empty=False, empty_val=None):
 
     data = {}
     for line in shlex_split(content):
+        if line.strip().startswith("#"):
+            continue
         key, value = line.split("=", 1)
         if not value:
             value = empty_val
