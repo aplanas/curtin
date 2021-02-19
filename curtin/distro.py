@@ -23,7 +23,8 @@ from .log import LOG
 
 DistroInfo = namedtuple('DistroInfo', ('variant', 'family'))
 DISTRO_NAMES = ['arch', 'centos', 'debian', 'fedora', 'freebsd', 'gentoo',
-                'opensuse', 'opensuse_leap', 'redhat', 'rhel', 'sles', 'suse', 'ubuntu']
+                '  opensuse', 'opensuse_leap', 'opensuse_tumbleweed', 'redhat',
+                'rhel', 'sles', 'suse', 'ubuntu']
 
 
 # python2.7 lacks  PEP 435, so we must make use an alternative for py2.7/3.x
@@ -40,7 +41,8 @@ OS_FAMILIES = {
                      DISTROS.rhel],
     DISTROS.gentoo: [DISTROS.gentoo],
     DISTROS.freebsd: [DISTROS.freebsd],
-    DISTROS.suse: [DISTROS.opensuse, DISTROS.opensuse_leap, DISTROS.sles, DISTROS.suse],
+    DISTROS.suse: [DISTROS.opensuse, DISTROS.opensuse_leap,
+                   DISTROS.opensuse_tumbleweed, DISTROS.sles, DISTROS.suse],
     DISTROS.arch: [DISTROS.arch],
 }
 
@@ -160,6 +162,18 @@ def is_centos(target=None):
 def is_rhel(target=None):
     """Check if RHEL specific file is present at target"""
     return os.path.exists(target_path(target, 'etc/redhat-release'))
+
+
+def is_opensuse(target=None):
+    """Check if is Leap or Tumbleweed"""
+    distinfo = get_distroinfo(target=target)
+    return distinfo.variant.startswith("opensuse")
+
+
+def is_sles(target=None):
+    """Check if is SLES"""
+    distinfo = get_distroinfo(target=target)
+    return distinfo.variant == "sles"
 
 
 def _lsb_release(target=None):
