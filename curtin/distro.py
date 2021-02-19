@@ -23,7 +23,7 @@ from .log import LOG
 
 DistroInfo = namedtuple('DistroInfo', ('variant', 'family'))
 DISTRO_NAMES = ['arch', 'centos', 'debian', 'fedora', 'freebsd', 'gentoo',
-                '  opensuse', 'opensuse_leap', 'opensuse_tumbleweed', 'redhat',
+                'opensuse', 'opensuse_leap', 'opensuse_tumbleweed', 'redhat',
                 'rhel', 'sles', 'suse', 'ubuntu']
 
 
