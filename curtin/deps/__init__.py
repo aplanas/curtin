@@ -9,7 +9,8 @@ from curtin.util import (
     subp,
     which,
 )
-
+from curtin import distro
+from curtin.distro import DISTROS
 from curtin.distro import (
     get_architecture,
     install_packages,
@@ -42,7 +43,12 @@ REQUIRED_KERNEL_MODULES = [
     # kmod name
 ]
 
-if lsb_release()['codename'] == "precise":
+distro_info = distro.get_distroinfo()
+if not distro_info:
+     raise RuntimeError('Failed to determine target distro')
+osfamily = distro_info.family
+
+if lsb_release()['codename'] == "precise" or osfamily == DISTROS.suse:
     REQUIRED_IMPORTS.append(
         ('import oauth.oauth', 'python-oauth', None),)
 else:
@@ -50,13 +56,15 @@ else:
         ('import oauthlib.oauth1', 'python-oauthlib', 'python3-oauthlib'),)
 
 # zfs is > trusty only
-if not lsb_release()['codename'] in ["precise", "trusty"]:
+if not lsb_release()['codename'] in ["precise", "trusty"] and osfamily != DISTROS.suse:
     REQUIRED_EXECUTABLES.append(('zfs', 'zfsutils-linux'))
     REQUIRED_KERNEL_MODULES.append('zfs')
 
 if not is_uefi_bootable() and 'arm' in get_architecture():
     REQUIRED_EXECUTABLES.append(('flash-kernel', 'flash-kernel'))
 
+if osfamily == DISTROS.suse:
+    REQUIRED_EXECUTABLES.append(('zypper', 'zypper'))
 
 class MissingDeps(Exception):
     def __init__(self, message, deps):
@@ -138,14 +146,14 @@ def check_kernel_modules(modules=None):
         modules = REQUIRED_KERNEL_MODULES
 
     # if we're missing any modules, install the full
-    # linux-image package for this environment
+    # linux-image package for this environment. FIXME: is this needed for SUSE?
     for kmod in modules:
         try:
             subp(['modinfo', '--filename', kmod], capture=True)
         except ProcessExecutionError:
-            kernel_pkg = 'linux-image-%s' % os.uname()[2]
-            return [MissingDeps('missing kernel module %s' % kmod, kernel_pkg)]
-
+            if osfamily != DISTROS.suse:
+               kernel_pkg = 'linux-image-%s' % os.uname()[2]
+               return [MissingDeps('missing kernel module %s' % kmod, kernel_pkg)]
     return []
 
 

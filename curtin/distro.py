@@ -23,8 +23,7 @@ from .log import LOG
 
 DistroInfo = namedtuple('DistroInfo', ('variant', 'family'))
 DISTRO_NAMES = ['arch', 'centos', 'debian', 'fedora', 'freebsd', 'gentoo',
-                'opensuse', 'opensuse_leap', 'opensuse_tumbleweed', 'redhat',
-                'rhel', 'sles', 'suse', 'ubuntu']
+                'opensuse', 'opensuse_leap', 'redhat', 'rhel', 'sles', 'suse', 'ubuntu']
 
 
 # python2.7 lacks  PEP 435, so we must make use an alternative for py2.7/3.x
@@ -41,8 +40,7 @@ OS_FAMILIES = {
                      DISTROS.rhel],
     DISTROS.gentoo: [DISTROS.gentoo],
     DISTROS.freebsd: [DISTROS.freebsd],
-    DISTROS.suse: [DISTROS.opensuse, DISTROS.opensuse_leap,
-                   DISTROS.opensuse_tumbleweed, DISTROS.sles, DISTROS.suse],
+    DISTROS.suse: [DISTROS.opensuse, DISTROS.opensuse_leap, DISTROS.sles, DISTROS.suse],
     DISTROS.arch: [DISTROS.arch],
 }
 
@@ -56,7 +54,7 @@ _LSB_RELEASE = {}
 
 def name_to_distro(distname):
     try:
-        return DISTROS[DISTROS.index(distname.replace("-", "_"))]
+        return DISTROS[DISTROS.index(distname)]
     except (IndexError, AttributeError):
         LOG.error('Unknown distro name: %s', distname)
 
@@ -85,7 +83,7 @@ def os_release(target=None):
             data = _parse_redhat_release(release_file=relfile, target=target)
             if data:
                 break
-
+    data["ID"] = data["ID"].replace("-","_")
     return data
 
 
@@ -162,18 +160,6 @@ def is_centos(target=None):
 def is_rhel(target=None):
     """Check if RHEL specific file is present at target"""
     return os.path.exists(target_path(target, 'etc/redhat-release'))
-
-
-def is_opensuse(target=None):
-    """Check if is Leap or Tumbleweed"""
-    distinfo = get_distroinfo(target=target)
-    return distinfo.variant.startswith("opensuse")
-
-
-def is_sles(target=None):
-    """Check if is SLES"""
-    distinfo = get_distroinfo(target=target)
-    return distinfo.variant == "sles"
 
 
 def _lsb_release(target=None):
@@ -338,6 +324,25 @@ def run_yum_command(mode, args=None, opts=None, env=None, target=None,
         return inchroot.subp(cmd, env=env)
 
 
+def run_zypper_command(mode, args=None, opts=None, env=None, target=None,
+                       execute=True, allow_daemons=True):
+    if mode in ["install", "update"]:
+        defopts = ['--no-confirm', '--auto-agree-with-licenses']
+    else:
+        defopts = []
+
+    if args is None:
+        args = []
+
+    cmd = ['/usr/bin/zypper']
+    cmd += [mode] + defopts + args
+    if not execute:
+        return env, cmd
+
+    with ChrootableTarget(target, allow_daemons=True) as inchroot:
+        return inchroot.subp(cmd, env=env)
+
+
 def yum_install(mode, packages=None, opts=None, env=None, target=None,
                 allow_daemons=False):
 
@@ -413,6 +418,7 @@ def install_packages(pkglist, osfamily=None, opts=None, target=None, env=None,
     installer_map = {
         DISTROS.debian: run_apt_command,
         DISTROS.redhat: run_yum_command,
+        DISTROS.suse: run_zypper_command,
     }
 
     install_cmd = installer_map.get(osfamily)
@@ -590,7 +596,8 @@ def dpkg_get_architecture(target=None):
 
 def rpm_get_architecture(target=None):
     # rpm requires /dev /sys and /proc be mounted, use ChrootableTarget
-    with ChrootableTarget(target) as in_chroot:
+    # Deamons has not to be stopped while a rpm call.
+    with ChrootableTarget(target, allow_daemons=True) as in_chroot:
         out, _ = in_chroot.subp(['rpm', '-E', '%_arch'], capture=True)
     return out.strip()
 
@@ -602,7 +609,7 @@ def get_architecture(target=None, osfamily=None):
     if osfamily == DISTROS.debian:
         return dpkg_get_architecture(target=target)
 
-    if osfamily == DISTROS.redhat:
+    if osfamily == DISTROS.redhat or osfamily == DISTROS.suse:
         return rpm_get_architecture(target=target)
 
     raise ValueError("Unhandled osfamily=%s" % osfamily)
