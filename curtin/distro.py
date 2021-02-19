@@ -85,7 +85,9 @@ def os_release(target=None):
             data = _parse_redhat_release(release_file=relfile, target=target)
             if data:
                 break
-    data["ID"] = data["ID"].replace("-","_")
+
+    data["ID"] = data["ID"].replace("-", "_")
+
     return data
 
 
@@ -338,25 +340,6 @@ def run_yum_command(mode, args=None, opts=None, env=None, target=None,
         return inchroot.subp(cmd, env=env)
 
 
-def run_zypper_command(mode, args=None, opts=None, env=None, target=None,
-                       execute=True, allow_daemons=True):
-    if mode in ["install", "update"]:
-        defopts = ['--no-confirm', '--auto-agree-with-licenses']
-    else:
-        defopts = []
-
-    if args is None:
-        args = []
-
-    cmd = ['/usr/bin/zypper']
-    cmd += [mode] + defopts + args
-    if not execute:
-        return env, cmd
-
-    with ChrootableTarget(target, allow_daemons=True) as inchroot:
-        return inchroot.subp(cmd, env=env)
-
-
 def yum_install(mode, packages=None, opts=None, env=None, target=None,
                 allow_daemons=False):
 
@@ -390,6 +373,26 @@ def yum_install(mode, packages=None, opts=None, env=None, target=None,
         return inchroot.subp(cmd + inst_opts + packages, env=env)
 
 
+def run_zypper_command(mode, args=None, opts=None, env=None, target=None,
+                       execute=True, allow_daemons=True):
+    defopts = ["--non-interactive"]
+    if mode in ["install", "update", "dist-upgrade"]:
+        defopts.append("--auto-agree-with-licenses")
+
+    if args is None:
+        args = []
+
+    if opts is None:
+        opts = []
+
+    cmd = ["zypper"] + defopts + opts + [mode] + args
+    if not execute:
+        return env, cmd
+
+    with ChrootableTarget(target, allow_daemons=allow_daemons) as inchroot:
+        return inchroot.subp(cmd, env=env)
+
+
 def rpm_get_dist_id(target=None):
     """Use rpm command to extract the '%rhel' distro macro which returns
        the major os version id (6, 7, 8).  This works for centos or rhel
@@ -409,6 +412,8 @@ def system_upgrade(opts=None, target=None, env=None, allow_daemons=False,
                          'subcommands': ('dist-upgrade', 'autoremove')},
         DISTROS.redhat: {'function': run_yum_command,
                          'subcommands': ('upgrade',)},
+        DISTROS.suse: {'function': run_zypper_command,
+                       'subcommands': ('upgrade',)},
     }
     if osfamily not in distro_cfg:
         raise ValueError('Distro "%s" does not have system_upgrade support',
@@ -610,8 +615,7 @@ def dpkg_get_architecture(target=None):
 
 def rpm_get_architecture(target=None):
     # rpm requires /dev /sys and /proc be mounted, use ChrootableTarget
-    # Deamons has not to be stopped while a rpm call.
-    with ChrootableTarget(target, allow_daemons=True) as in_chroot:
+    with ChrootableTarget(target) as in_chroot:
         out, _ = in_chroot.subp(['rpm', '-E', '%_arch'], capture=True)
     return out.strip()
 
